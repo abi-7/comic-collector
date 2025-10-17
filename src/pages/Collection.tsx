@@ -1,5 +1,7 @@
+import { useState } from "react";
 import { ComicCard } from "@/components/ComicCard";
 import { CameraButton } from "@/components/CameraButton";
+import { useToast } from "@/hooks/use-toast";
 
 // Mock data - In a real app, this would come from a database
 const mockComics = [
@@ -48,16 +50,32 @@ const mockComics = [
 ];
 
 const Collection = () => {
+  const { toast } = useToast();
+  const [comics, setComics] = useState(mockComics);
+
+  const handleBarcodeScanned = (barcode: string) => {
+    // In a real app, you would fetch comic data from an API using the barcode
+    // For now, we'll show what was scanned
+    toast({
+      title: "Comic Book Detected!",
+      description: `Barcode: ${barcode}\n\nIn a production app, this would fetch comic details from a database and add it to your collection.`,
+      duration: 5000,
+    });
+    
+    console.log("Scanned barcode:", barcode);
+    // TODO: Fetch comic data from API and add to collection
+  };
+
   return (
     <>
       <div className="mb-6">
         <h2 className="text-3xl font-black text-primary mb-2">MY COLLECTION</h2>
         <p className="text-muted-foreground">
-          {mockComics.length} comic{mockComics.length !== 1 ? "s" : ""} in your vault
+          {comics.length} comic{comics.length !== 1 ? "s" : ""} in your vault
         </p>
       </div>
 
-      {mockComics.length === 0 ? (
+      {comics.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-20 text-center">
           <div className="bg-card rounded-2xl p-8 comic-shadow border-2 border-dashed border-muted max-w-md">
             <h3 className="text-xl font-bold mb-2">Your collection is empty</h3>
@@ -68,13 +86,13 @@ const Collection = () => {
         </div>
       ) : (
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
-          {mockComics.map((comic) => (
+          {comics.map((comic) => (
             <ComicCard key={comic.id} {...comic} />
           ))}
         </div>
       )}
 
-      <CameraButton />
+      <CameraButton onBarcodeScanned={handleBarcodeScanned} />
     </>
   );
 };
