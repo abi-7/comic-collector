@@ -6,9 +6,13 @@ import { useToast } from "@/hooks/use-toast";
 
 interface CameraButtonProps {
   onBarcodeScanned?: (barcode: string) => void;
+  disabled?: boolean;
 }
 
-export const CameraButton = ({ onBarcodeScanned }: CameraButtonProps) => {
+export const CameraButton = ({
+  onBarcodeScanned,
+  disabled,
+}: CameraButtonProps) => {
   const [isScannerOpen, setIsScannerOpen] = useState(false);
   const { toast } = useToast();
 
@@ -18,7 +22,7 @@ export const CameraButton = ({ onBarcodeScanned }: CameraButtonProps) => {
 
   const handleBarcodeDetected = (barcode: string) => {
     console.log("Barcode detected:", barcode);
-    
+
     if (onBarcodeScanned) {
       onBarcodeScanned(barcode);
     } else {

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import {
   BarcodeScanner as CapacitorBarcodeScanner,
   BarcodeFormat,
@@ -6,6 +6,14 @@ import {
 import { Button } from "@/components/ui/button";
 import { X, Zap } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { Capacitor } from "@capacitor/core";
+
+interface DetectedBarcode {
+  rawValue: string;
+  format: string;
+  boundingBox?: DOMRectReadOnly;
+  cornerPoints?: Array<{ x: number; y: number }>;
+}
 
 interface BarcodeScannerProps {
   isOpen: boolean;
@@ -24,8 +32,23 @@ export const BarcodeScanner = ({
   const [isScanning, setIsScanning] = useState(false);
   const { toast } = useToast();
 
+  const [useWebScanner, setUseWebScanner] = useState(false);
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const streamRef = useRef<MediaStream | null>(null);
+  const scanIntervalRef = useRef<number | null>(null);
+
+  // Check if we're on a native platform or web
+  //for testing in browser
+  const isNativePlatform = Capacitor.isNativePlatform();
+
   useEffect(() => {
-    checkSupport();
+    if (isNativePlatform) {
+      checkSupport();
+    } else {
+      setUseWebScanner(true);
+      setIsSupported(true);
+    }
   }, []);
 
   const checkSupport = async () => {
@@ -33,20 +56,18 @@ export const BarcodeScanner = ({
       const { supported } = await CapacitorBarcodeScanner.isSupported();
       setIsSupported(supported);
 
-      if (!supported) {
-        toast({
-          title: "Scanner Not Available",
-          description:
-            "Barcode scanning is not supported on this device. Please use a physical mobile device.",
-          variant: "destructive",
-        });
+      if (!supported && !isNativePlatform) {
+        setUseWebScanner(true);
+        setIsSupported(true);
       }
     } catch (error) {
       console.error("Error checking scanner support:", error);
       setIsSupported(false);
+      setUseWebScanner(true);
     }
   };
 
+  //native cap scanner - mobile only
   const requestPermissions = async (): Promise<boolean> => {
     try {
       const { camera } = await CapacitorBarcodeScanner.requestPermissions();
@@ -116,6 +137,132 @@ export const BarcodeScanner = ({
     }
   };
 
+  //web scanner - browser testing
+  const startWebScanner = async () => {
+    try {
+      setIsScanning(true);
+
+      // Request camera access
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: "environment" }, // Use back camera on mobile
+      });
+
+      streamRef.current = stream;
+
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+        videoRef.current.play();
+
+        // Start scanning for barcodes
+        scanIntervalRef.current = window.setInterval(() => {
+          scanBarcodeFromVideo();
+        }, 500); // Scan every 500ms
+      }
+    } catch (error) {
+      console.error("Error accessing camera:", error);
+      toast({
+        title: "Camera Access Denied",
+        description: "Please allow camera access to scan barcodes",
+        variant: "destructive",
+      });
+      setIsScanning(false);
+      onClose();
+    }
+  };
+
+  const scanBarcodeFromVideo = () => {
+    if (!videoRef.current || !canvasRef.current) return;
+
+    const video = videoRef.current;
+    const canvas = canvasRef.current;
+    const context = canvas.getContext("2d");
+
+    if (!context || video.readyState !== video.HAVE_ENOUGH_DATA) return;
+
+    // Set canvas size to match video
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+
+    // Draw current video frame to canvas
+    context.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+    // Try to detect barcode using BarcodeDetector API (if available)
+    if (typeof window !== "undefined" && "BarcodeDetector" in window) {
+      // @ts-expect-error BarcodeDetector constructor is not recognized by TypeScript
+      const barcodeDetector = new window.BarcodeDetector({
+        formats: [
+          "ean_13",
+          "ean_8",
+          "upc_a",
+          "upc_e",
+          "code_128",
+          "code_39",
+          "code_93",
+        ],
+      });
+
+      barcodeDetector
+        .detect(canvas)
+        .then((barcodes: DetectedBarcode[]) => {
+          if (barcodes.length > 0) {
+            const barcode = barcodes[0].rawValue;
+            handleWebScanSuccess(barcode);
+          }
+        })
+        .catch((error: Error) => {
+          console.error("Barcode detection error:", error);
+        });
+    }
+  };
+
+  const handleWebScanSuccess = (barcode: string) => {
+    // Stop scanning
+    stopWebScanner();
+
+    // Send barcode to parent
+    onScan(barcode);
+
+    toast({
+      title: "Barcode Detected!",
+      description: `Scanned: ${barcode}`,
+    });
+
+    onClose();
+  };
+
+  const stopWebScanner = () => {
+    // Stop video stream
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach((track) => track.stop());
+      streamRef.current = null;
+    }
+
+    // Clear scan interval
+    if (scanIntervalRef.current) {
+      clearInterval(scanIntervalRef.current);
+      scanIntervalRef.current = null;
+    }
+
+    setIsScanning(false);
+  };
+
+  // ============================================
+  // MANUAL BARCODE ENTRY (Fallback)
+  // ============================================
+  const [manualBarcode, setManualBarcode] = useState("");
+
+  const handleManualSubmit = () => {
+    if (manualBarcode.trim()) {
+      onScan(manualBarcode.trim());
+      toast({
+        title: "Barcode Entered",
+        description: `Barcode: ${manualBarcode}`,
+      });
+      setManualBarcode("");
+      onClose();
+    }
+  };
+
   const stopScan = async () => {
     try {
       await CapacitorBarcodeScanner.stopScan();
@@ -134,15 +281,21 @@ export const BarcodeScanner = ({
 
   useEffect(() => {
     if (isOpen && isSupported) {
-      startScan();
+      if (useWebScanner) {
+        startWebScanner();
+      } else {
+        startScan();
+      }
     }
 
     return () => {
-      if (isScanning) {
+      if (useWebScanner) {
+        stopWebScanner();
+      } else if (isScanning) {
         stopScan();
       }
     };
-  }, [isOpen, isSupported]);
+  }, [isOpen, isSupported, useWebScanner]);
 
   if (!isOpen) return null;
 
@@ -151,7 +304,9 @@ export const BarcodeScanner = ({
       {/* Header */}
       <div className="absolute top-0 left-0 right-0 z-10 bg-gradient-to-b from-background/95 to-transparent p-4">
         <div className="flex items-center justify-between">
-          <h2 className="text-xl font-black text-primary">SCAN BARCODE</h2>
+          <h2 className="text-xl font-black text-primary">
+            {useWebScanner ? "SCAN BARCODE (WEB)" : "SCAN BARCODE"}
+          </h2>
           <Button
             onClick={handleClose}
             variant="ghost"
@@ -163,28 +318,59 @@ export const BarcodeScanner = ({
         </div>
       </div>
 
-      {/* Scanner View - The native camera will overlay here */}
-      <div className="absolute inset-0 flex items-center justify-center">
-        {!isSupported ? (
-          <div className="text-center p-8 max-w-md">
-            <div className="bg-card rounded-2xl p-8 comic-shadow border-2 border-foreground">
-              <Zap className="h-16 w-16 text-primary mx-auto mb-4" />
-              <h3 className="text-xl font-bold mb-2">
-                Native Feature Required
-              </h3>
-              <p className="text-muted-foreground mb-4">
-                Barcode scanning requires a physical mobile device with a
-                camera.
-              </p>
-              <p className="text-sm text-muted-foreground">
-                To test this feature, export your app to GitHub and run it on a
-                mobile device or emulator.
-              </p>
+      {/* Scanner View */}
+      <div className="absolute inset-0 flex flex-col items-center justify-center p-4">
+        {useWebScanner ? (
+          <>
+            {/* Web Camera View */}
+            <div className="relative w-full max-w-md aspect-video bg-black rounded-2xl overflow-hidden comic-shadow">
+              <video
+                ref={videoRef}
+                className="w-full h-full object-cover"
+                playsInline
+                muted
+              />
+              <canvas ref={canvasRef} className="hidden" />
+
+              {/* Scanning Frame Overlay */}
+              <div className="absolute inset-0 flex items-center justify-center">
+                <div className="w-3/4 h-1/2 border-4 border-primary rounded-2xl">
+                  <div className="absolute inset-0 flex items-center justify-center">
+                    <div className="w-full h-1 bg-primary animate-pulse" />
+                  </div>
+                </div>
+              </div>
             </div>
-          </div>
+
+            {/* Manual Entry Fallback */}
+            <div className="mt-6 w-full max-w-md">
+              <div className="bg-card p-4 rounded-xl border-2 border-muted">
+                <p className="text-sm text-muted-foreground mb-2 text-center">
+                  Camera not detecting? Enter barcode manually:
+                </p>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={manualBarcode}
+                    onChange={(e) => setManualBarcode(e.target.value)}
+                    placeholder="Enter barcode number"
+                    className="flex-1 px-3 py-2 rounded-lg border-2 border-input bg-background"
+                    onKeyDown={(e) => e.key === "Enter" && handleManualSubmit()}
+                  />
+                  <Button onClick={handleManualSubmit} size="sm">
+                    Submit
+                  </Button>
+                </div>
+              </div>
+            </div>
+
+            <p className="mt-4 text-sm text-muted-foreground text-center">
+              Position barcode within the frame
+            </p>
+          </>
         ) : (
+          // Native Scanner View
           <div className="text-center">
-            {/* Scanning Frame */}
             <div className="relative w-64 h-64 border-4 border-primary rounded-2xl comic-shadow">
               <div className="absolute inset-0 flex items-center justify-center">
                 <div className="w-full h-1 bg-primary animate-pulse" />
@@ -200,12 +386,12 @@ export const BarcodeScanner = ({
         )}
       </div>
 
-      {/* Bottom Instruction */}
+      {/* Bottom Info */}
       <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-background/95 to-transparent p-6 text-center">
         <p className="text-sm text-muted-foreground">
-          {isSupported
-            ? "Scanning for barcodes..."
-            : "Scanner not available in web browser"}
+          {useWebScanner
+            ? "Using web camera - for best results, use the mobile app"
+            : "Scanning for barcodes..."}
         </p>
       </div>
     </div>
