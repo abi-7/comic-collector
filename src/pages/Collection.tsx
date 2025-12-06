@@ -9,42 +9,24 @@ const mockComics = [
     id: "1",
     title: "The Amazing Spider-Man",
     issue: "#252",
-    coverImage: "https://images.unsplash.com/photo-1612036782180-6f0b6cd846fe?w=400&h=600&fit=crop",
+    coverImage:
+      "https://images.unsplash.com/photo-1612036782180-6f0b6cd846fe?w=400&h=600&fit=crop",
     publisher: "Marvel Comics",
   },
   {
     id: "2",
-    title: "X-Men",
-    issue: "#137",
-    coverImage: "https://images.unsplash.com/photo-1612036781514-a6c3b6d6b6f6?w=400&h=600&fit=crop",
-    publisher: "Marvel Comics",
+    title: "Batman",
+    issue: "#608",
+    coverImage:
+      "https://images.unsplash.com/photo-1608889335941-32ac5f2041b9?w=400&h=600&fit=crop",
+    publisher: "DC Comics",
   },
   {
     id: "3",
-    title: "Batman",
-    issue: "#608",
-    coverImage: "https://images.unsplash.com/photo-1608889335941-32ac5f2041b9?w=400&h=600&fit=crop",
-    publisher: "DC Comics",
-  },
-  {
-    id: "4",
-    title: "The Fantastic Four",
-    issue: "#48",
-    coverImage: "https://images.unsplash.com/photo-1612036782364-1828a3c7e0d7?w=400&h=600&fit=crop",
-    publisher: "Marvel Comics",
-  },
-  {
-    id: "5",
-    title: "Wonder Woman",
-    issue: "#170",
-    coverImage: "https://images.unsplash.com/photo-1635805737707-575885ab0820?w=400&h=600&fit=crop",
-    publisher: "DC Comics",
-  },
-  {
-    id: "6",
     title: "The Avengers",
     issue: "#4",
-    coverImage: "https://images.unsplash.com/photo-1612036782180-6f0b6cd846fe?w=400&h=600&fit=crop&sat=-100",
+    coverImage:
+      "https://images.unsplash.com/photo-1612036782180-6f0b6cd846fe?w=400&h=600&fit=crop&sat=-100",
     publisher: "Marvel Comics",
   },
 ];
@@ -61,19 +43,14 @@ const Collection = () => {
       description: `Barcode: ${barcode}\n\nIn a production app, this would fetch comic details from a database and add it to your collection.`,
       duration: 5000,
     });
-    
+
     console.log("Scanned barcode:", barcode);
     // TODO: Fetch comic data from API and add to collection
   };
 
   return (
     <>
-      <div className="mb-6">
-        <h2 className="text-3xl font-black text-primary mb-2">MY COLLECTION</h2>
-        <p className="text-muted-foreground">
-          {comics.length} comic{comics.length !== 1 ? "s" : ""} in your vault
-        </p>
-      </div>
+      <div className="mb-6"></div>
 
       {comics.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-20 text-center">
@@ -85,7 +62,7 @@ const Collection = () => {
           </div>
         </div>
       ) : (
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
+        <div className="grid grid-cols-2 gap-8 max-w-xl mx-auto px-8 py-8">
           {comics.map((comic) => (
             <ComicCard key={comic.id} {...comic} />
           ))}
