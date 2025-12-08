@@ -8,7 +8,10 @@ export interface Comic {
   barcode?: string;
   description?: string;
   creators?: string[];
+  writer?: string;
+  artist?: string;
   releaseDate?: string;
+  retailPrice?: string;
   source?: "Google Books" | "Metron" | "Comic Vine" | "Manual";
 }
 
@@ -28,6 +31,19 @@ export interface GoogleBooksResponse {
       imageLinks?: {
         thumbnail?: string;
         smallThumbnail?: string;
+      };
+    };
+    saleInfo?: {
+      country: string;
+      saleability: string;
+      isEbook: boolean;
+      listPrice?: {
+        amount: number;
+        currencyCode: string;
+      };
+      retailPrice?: {
+        amount: number;
+        currencyCode: string;
       };
     };
   }>;

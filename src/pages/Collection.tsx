@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { ComicCard } from "@/components/ComicCard";
 import { CameraButton } from "@/components/CameraButton";
 import { useToast } from "@/hooks/use-toast";
@@ -7,13 +7,35 @@ import type { Comic } from "@/lib/comicTypes";
 
 const Collection = () => {
   const { toast } = useToast();
+  const LOCAL_STORAGE_KEY = "comicCollection_v1";
   const [comics, setComics] = useState<Comic[]>([]);
   const [isLoading, setIsLoading] = useState(false);
 
+  // Load saved collection on mount
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(LOCAL_STORAGE_KEY);
+      if (raw) {
+        const parsed = JSON.parse(raw) as Comic[];
+        setComics(parsed);
+      }
+    } catch (e) {
+      console.error("Failed to load comics from localStorage", e);
+    }
+  }, []);
+
+  // Persist collection whenever it changes
+  useEffect(() => {
+    try {
+      localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(comics));
+    } catch (e) {
+      console.error("Failed to save comics to localStorage", e);
+    }
+  }, [comics]);
+
   const handleBarcodeScanned = async (barcode: string) => {
     setIsLoading(true);
-    // In a real app, you would fetch comic data from an API using the barcode
-    // For now, we'll show what was scanned
+    // Fetch comic data by barcode
     try {
       const formattedBarcode = formatBarcode(barcode);
 
@@ -37,8 +59,7 @@ const Collection = () => {
             description: `The comic "${comicData.title} ${comicData.issue}" is already in your collection.`,
           });
         } else {
-          //setComics((prevComics => [...prevComics, comicData]);
-          setComics((prev) => [comicData, ...prev]);
+          setComics((prev) => [comicData, ...prev]); // persisted by effect
 
           toast({
             title: "Comic added!",
@@ -63,6 +84,20 @@ const Collection = () => {
     }
   };
 
+  // Remove a comic from the collection (updates state -> persisted by effect)
+  const removeComic = (comicId: string | number) => {
+    const idStr = String(comicId);
+    if (!confirm("Remove this comic from your collection?")) return;
+    setComics((prev) => {
+      const next = prev.filter((c) => String(c.id) !== idStr);
+      toast({
+        title: "Comic removed",
+        description: "The comic was removed from your collection.",
+      });
+      return next;
+    });
+  };
+
   return (
     <>
       <div className="mb-6"></div>
@@ -84,7 +119,16 @@ const Collection = () => {
       ) : (
         <div className="grid grid-cols-2 gap-8 max-w-xl mx-auto px-8 py-8">
           {comics.map((comic) => (
-            <ComicCard key={comic.id} {...comic} />
+            <div key={comic.id} className="flex flex-col items-center">
+              <ComicCard {...comic} />
+              <button
+                type="button"
+                onClick={() => removeComic(comic.id)}
+                className="mt-2 text-sm text-destructive hover:underline"
+              >
+                Remove
+              </button>
+            </div>
           ))}
         </div>
       )}
